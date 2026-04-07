@@ -56,7 +56,7 @@ HMCDOP/
 │   │   └── security/           # JWT Filter
 │   ├── Dockerfile
 │   └── pom.xml
-├── frontend/                   # React Dashboard (3 trang)
+├── frontend/                   # React Dashboard (4 trang)
 │   └── src/pages/
 │       ├── LoginPage.jsx
 │       ├── DeployPage.jsx      # SSE log viewer
@@ -77,7 +77,8 @@ HMCDOP/
 
 ```bash
 # Clone project
-cd c:\TOAINA\PROJECTS\HMCDOP
+git clone <repository-url>
+cd HMCDOP
 
 # Chạy services (PostgreSQL + Spring Boot + React)
 docker-compose up -d
