@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: minipaas-control-plane
+
+  # ===== Database (PostgreSQL) =====
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:minipaas}
+    username: ${DB_USER:minipaas}
+    password: ${DB_PASSWORD:minipaas}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update   # tự tạo/cập nhật bảng khi restart
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+server:
+  port: 8080
+  # CORS được handle trong CorsConfig.java
+
+# ===== App Config =====
+app:
+
+  # JWT Authentication
+  jwt:
+    secret: ${JWT_SECRET:minipaas-super-secret-key-change-this-in-production-2024}
+    expiration-ms: 86400000   # 24 giờ
+
+  # Kubernetes / K3s
+  kubernetes:
+    # Đường dẫn kubeconfig trên máy chủ
+    # - Trên Oracle Cloud VM (K3s master): /etc/rancher/k3s/k3s.yaml
+    # - Trên máy local dev: ~/.kube/config (hoặc dùng mock)
+    kubeconfig: ${KUBECONFIG:/etc/rancher/k3s/k3s.yaml}
+    
+    # mock=true: Giả lập K8s operations (dùng khi dev local không có K3s)
+    mock: ${K8S_MOCK:true}
+
+  # Container Registry (GHCR - GitHub Container Registry)
+  registry:
+    # GitHub username (dùng để push image lên ghcr.io/<ghcr-user>/...)
+    ghcr-user: ${GHCR_USER:your-github-username}
+    # GitHub Personal Access Token với quyền write:packages
+    ghcr-token: ${GHCR_TOKEN:your-github-pat-token}
+
+  # Địa chỉ IP public của K3s Master VM (Oracle Cloud)
+  # URL app sẽ là: http://app-{id}.<master-ip>.nip.io
+  master-ip: ${MASTER_IP:127.0.0.1}
+
+# ===== Logging =====
+logging:
+  level:
+    com.minipaas: DEBUG
+    io.fabric8: WARN
+  pattern:
+    console: "%d{HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

@@ -1,0 +1,83 @@
+---
+# =============================================================
+#  rbac.yaml — RBAC cho MiniPaaS Control Plane
+# =============================================================
+# Tạo ServiceAccount và ClusterRole cho Spring Boot app
+# để có quyền tạo/xóa K8s resources trên K3s cluster.
+#
+# Áp dụng: kubectl apply -f rbac.yaml
+# =============================================================
+
+# ServiceAccount cho Spring Boot
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: minipaas-controller
+  namespace: default
+
+---
+# ClusterRole với quyền đầy đủ trên các resources MiniPaaS cần
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: minipaas-controller-role
+rules:
+  # Namespaces — tạo namespace riêng cho mỗi deployment
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "create", "delete"]
+
+  # Pods — đọc logs từ Kaniko pods
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+
+  # Secrets — lưu GHCR credentials
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "create", "update", "delete"]
+
+  # ConfigMaps — lưu clone script cho Kaniko
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "create", "update", "delete"]
+
+  # Services — tạo ClusterIP cho mỗi app
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "create", "update", "delete"]
+
+  # Deployments — deploy Docker image lên K3s
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "create", "update", "delete"]
+
+  # Jobs — Kaniko build jobs
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "create", "update", "delete", "watch"]
+
+  # Nodes — đọc thông tin CPU/RAM của nodes
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+
+  # Traefik IngressRoute (CRD)
+  - apiGroups: ["traefik.containo.us"]
+    resources: ["ingressroutes"]
+    verbs: ["get", "list", "create", "update", "delete"]
+
+---
+# Bind ClusterRole vào ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: minipaas-controller-binding
+subjects:
+  - kind: ServiceAccount
+    name: minipaas-controller
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: minipaas-controller-role
+  apiGroup: rbac.authorization.k8s.io

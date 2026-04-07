@@ -1,0 +1,80 @@
+# =============================================================
+#  docker-compose.yml — MiniPaaS Local Development
+# =============================================================
+# Chạy toàn bộ hệ thống trên máy local để phát triển và test.
+# K8s operations ở chế độ MOCK (K8S_MOCK=true).
+#
+# Cách chạy:
+#   docker-compose up -d
+#
+# Truy cập:
+#   Dashboard: http://localhost:5173
+#   API:       http://localhost:8080/api/v1/health
+# =============================================================
+
+services:
+
+  # ── PostgreSQL Database ──────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: minipaas-db
+    environment:
+      POSTGRES_DB: minipaas
+      POSTGRES_USER: minipaas
+      POSTGRES_PASSWORD: minipaas
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minipaas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Spring Boot Backend (Control Plane) ─────────────────
+  backend:
+    build: ./backend
+    container_name: minipaas-backend
+    ports:
+      - "8080:8080"
+    environment:
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: minipaas
+      DB_USER: minipaas
+      DB_PASSWORD: minipaas
+      # K8s — MOCK MODE cho local dev
+      K8S_MOCK: "true"
+      # JWT
+      JWT_SECRET: "local-dev-secret-key-change-in-production"
+      # GHCR (không cần trong mock mode)
+      GHCR_USER: "your-github-username"
+      GHCR_TOKEN: "your-github-pat"
+      # IP của K3s Master (fake trong local dev)
+      MASTER_IP: "127.0.0.1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── React Frontend ───────────────────────────────────────
+  frontend:
+    image: node:20-alpine
+    container_name: minipaas-frontend
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:8080
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
