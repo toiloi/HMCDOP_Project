@@ -161,6 +161,48 @@ java -jar target/minipaas-backend-*.jar
 
 ---
 
+## ☁️ Deploy lên AWS (Free Tier Optimized)
+
+Do AWS Free Tier chỉ cấp máy ảo 1GB RAM (t2/t3.micro), ta không thể dùng hạ tầng mặc định. Hệ thống cần bật Swap 4GB và có thể đẩy việc build image qua GitHub Actions.
+
+### Bước 1: Tạo VM và Database trên AWS
+1. Tạo 1 **EC2 Instance (t2.micro)** Ubuntu 22.04. Mở ports: 22, 80, 443, 6443, 8472, 10250, 8080.
+2. Tạo **AWS RDS (db.t3.micro - Postgres)** để giải phóng RAM cho EC2. Ghi lại URL endpoint của DB.
+
+### Bước 2: Khởi tạo EC2 Master Node (kèm 4GB Swap)
+```bash
+ssh ubuntu@<VM-public-ip>
+export TS_AUTHKEY="tskey-auth-xxxxx"
+# Script tự động tạo 4GB Swap và cài đặt K3s siêu nhẹ
+bash <(curl -fsSL https://raw.githubusercontent.com/your-repo/main/infrastructure/aws/install-ec2-master.sh)
+```
+
+### Bước 3: Cấu hình Spring Boot dùng AWS RDS và GitHub Actions
+1. Đảm bảo bạn đã có workflow `.github/workflows/remote-build.yml` trong repository của bạn.
+2. Cấu hình file `.env` trên EC2:
+```bash
+cat > /home/ubuntu/minipaas.env << EOF
+# Dùng Endpoint của AWS RDS cấp
+DB_HOST=minipaas-db.xxxx.us-east-1.rds.amazonaws.com
+DB_USER=postgres
+DB_PASSWORD=your_rds_password
+DB_NAME=minipaas
+
+# Các biến K8s / GitHub
+K8S_MOCK=false
+KUBECONFIG=/home/ubuntu/.kube/config
+GHCR_USER=your-github-username
+GHCR_TOKEN=ghp_xxxx
+MASTER_IP=$(curl -s ifconfig.me)
+JWT_SECRET=$(openssl rand -base64 32)
+# Khởi động chế độ GitHub Actions Build (thay cho Kaniko)
+BUILD_STRATEGY=github
+EOF
+```
+3. Chạy Spring Boot như hướng dẫn ở bước Oracle.
+
+---
+
 ## ⚙️ API Endpoints
 
 | Method | Endpoint | Mô tả |

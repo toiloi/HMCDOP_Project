@@ -111,20 +111,12 @@ public class DeploymentService {
             sendLog(dep, "🔐 Tạo GHCR credentials secret...");
             k8sService.createRegistrySecret(namespace);
 
-            // ── BƯỚC 3: Tạo Kaniko Build Job ──
-            sendLog(dep, "🔨 Tạo Kaniko Build Job...");
-            sendLog(dep, "   Context: " + dep.getGithubUrl() + " (branch: " + dep.getBranch() + ")");
-            sendLog(dep, "   Target:  " + imageTag);
-            String jobName = buildService.createKanikoBuildJob(
-                    namespace, dep.getGithubUrl(), dep.getBranch(), imageTag);
-            sendLog(dep, "✅ Job tạo thành công: " + jobName);
-
-            // ── BƯỚC 4: Theo dõi build + stream logs ──
-            sendLog(dep, "⏳ Đang build... (có thể mất 5-15 phút)");
-            boolean buildSuccess = buildService.watchJobUntilComplete(namespace, jobName, deploymentId);
+            // ── BƯỚC 3 & 4: Build Image & Theo dõi (Kaniko hoặc GitHub Actions) ──
+            sendLog(dep, "⏳ Đang khởi tạo luồng Build Image...");
+            boolean buildSuccess = buildService.buildAndWatch(namespace, dep.getGithubUrl(), dep.getBranch(), imageTag, deploymentId);
 
             if (!buildSuccess) {
-                throw new RuntimeException("Kaniko build thất bại!");
+                throw new RuntimeException("Build Image thất bại!");
             }
 
             // ── BƯỚC 5: Deploy app lên K3s ──
