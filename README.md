@@ -1,19 +1,19 @@
 # MiniPaaS — Nền tảng Tự động hoá Triển khai
-### Dự án Học thuật — Điện toán Đám mây (Hybrid Multi-Cloud)
+### Dự án Học thuật — Điện toán Đám mây (AWS Cloud)
 
 ---
 
 ## 🏗️ Kiến trúc Hệ thống
 
 ```
-[Người dùng] → http://<VM-IP>:8080 (Dashboard)
+[Người dùng] → http://<EC2-IP>:8080 (Dashboard)
                    ↓
          [Spring Boot Control Plane]
                    ↓ Fabric8 K8s Client (qua Tailscale 100.x.x.x)
-         [K3s Master Node — Oracle Cloud ARM]
+         [K3s Master Node — AWS EC2 t2.micro]
            ├── Traefik Ingress → *.nip.io  
-           ├── Worker 1 (Oracle Free ARM)
-           └── Worker 2 (Oracle Free ARM)
+           ├── AWS RDS (PostgreSQL)  
+           └── GitHub Actions (Remote Build)
 ```
 
 ### Các khái niệm Cloud Computing được minh họa
@@ -21,23 +21,24 @@
 | Khái niệm | Thành phần |
 |-----------|-----------|
 | Container Orchestration | K3s (Kubernetes lightweight) |
+| Cloud Database | AWS RDS (Relational Database Service) |
 | Mesh VPN / Overlay Network | Tailscale (WireGuard protocol) |
+| CI/CD Offloading | GitHub Actions Dispatch API |
 | Service Discovery & Ingress | Traefik (built-in K3s) |
-| Rootless Container Build | Kaniko (thay Docker-in-Docker) |
 | Infrastructure as Code | Shell scripts, K8s YAML manifests |
-| Multi-tenancy Isolation | K8s Namespace per deployment |
 | Async Pipeline | Spring @Async + SSE streaming |
 | Platform as a Service | Toàn bộ hệ thống |
 
 ---
 
-## 💰 Chi phí — $0 hoàn toàn
+## 💰 Chi phí — Thiết kế cho AWS Free Tier ($0/năm đầu)
 
 | Dịch vụ | Giới hạn Free | Mục đích |
 |---------|-------------|---------|
-| Oracle Cloud Always Free | 4 OCPU + 24GB RAM ARM (vĩnh viễn) | VMs chạy K3s |
+| AWS EC2 (t2/t3.micro) | 750 giờ/tháng (1 vCPU, 1GB RAM) | VM chạy K3s Control Plane |
+| AWS RDS (db.t3.micro) | 750 giờ/tháng | Database |
 | Tailscale | 100 thiết bị | Mesh VPN |
-| GHCR (GitHub) | Unlimited public | Container registry |
+| GHCR & GitHub Actions | 2000 phút & Unlimited Public | Build & lưu trữ Image |
 | nip.io | Unlimited | Wildcard DNS |
 
 ---
@@ -47,27 +48,15 @@
 ```
 HMCDOP/
 ├── backend/                    # Spring Boot Control Plane
-│   ├── src/main/java/com/minipaas/
-│   │   ├── controller/         # REST API + SSE
-│   │   ├── service/            # DeploymentService, KubernetesService, BuildService
-│   │   ├── model/              # JPA Entities
-│   │   ├── repository/         # Spring Data JPA
-│   │   ├── config/             # K8s, Async, Security
-│   │   └── security/           # JWT Filter
-│   ├── Dockerfile
-│   └── pom.xml
+│   └── ...                     # Code Backend Java
 ├── frontend/                   # React Dashboard (4 trang)
-│   └── src/pages/
-│       ├── LoginPage.jsx
-│       ├── DeployPage.jsx      # SSE log viewer
-│       ├── AppsPage.jsx
-│       └── NodesPage.jsx
+│   └── ...                     # Code Frontend
 ├── infrastructure/
-│   ├── k3s/
-│   │   ├── install-master.sh   # Setup K3s Master + Tailscale
-│   │   ├── install-worker.sh   # Setup K3s Worker + Tailscale
-│   │   └── rbac.yaml           # Quyền cho Spring Boot
+│   ├── aws/
+│   │   └── install-ec2-master.sh # Setup K3s + 4GB Swap trên AWS EC2
 │   └── postgres/init.sql
+├── .github/workflows/
+│   └── remote-build.yml        # Nhận lệnh build từ Spring Boot
 └── docker-compose.yml          # Local dev (mock K8s)
 ```
 
@@ -88,99 +77,30 @@ docker-compose up -d
 # API:       http://localhost:8080/api/v1/health
 ```
 
-> **K8S_MOCK=true** — K8s operations được giả lập. Build logs được mock để demo.
+> **K8S_MOCK=true** — K8s operations được giả lập. Bạn có thể test UI và luồng API.
 
 ---
 
-## 🌐 Deploy lên Oracle Cloud
+## ☁️ Deploy lên AWS
 
-### Bước 1: Tạo 3 VM trên Oracle Cloud Always Free
-
-1. Đăng ký [Oracle Cloud](https://cloud.oracle.com/free)
-2. Tạo 3 VM Instance:
-   - Shape: **VM.Standard.A1.Flex** (ARM64)
-   - Phân bổ: VM1 = 2 OCPU/12GB, VM2 = 1 OCPU/6GB, VM3 = 1 OCPU/6GB
-   - OS: Ubuntu 22.04 LTS ARM
-3. Mở ports trong Security List: **22, 80, 443, 6443, 8472, 10250, 8080**
-
-### Bước 2: Lấy Tailscale Auth Key
-
-1. Đăng nhập [tailscale.com](https://tailscale.com)
-2. Vào **Settings → Keys → Generate auth key**
-3. Chọn: Reusable + Ephemeral
-
-### Bước 3: Setup VM 1 (K3s Master)
-
-```bash
-ssh ubuntu@<VM1-public-ip>
-export TS_AUTHKEY="tskey-auth-xxxxx"
-bash <(curl -fsSL https://raw.githubusercontent.com/your-repo/main/infrastructure/k3s/install-master.sh)
-```
-
-Ghi lại: `K3S_MASTER_TS_IP`, `K3S_TOKEN`, `MASTER_PUBLIC_IP`
-
-### Bước 4: Setup VM 2, 3 (Workers)
-
-```bash
-ssh ubuntu@<VM2-public-ip>
-export TS_AUTHKEY="tskey-auth-xxxxx"
-export K3S_MASTER_TS_IP="100.x.x.x"
-export K3S_TOKEN="K10xxxx..."
-export WORKER_NAME="worker-01"
-bash <(curl -fsSL https://raw.githubusercontent.com/your-repo/main/infrastructure/k3s/install-worker.sh)
-```
-
-### Bước 5: Configure Spring Boot trên VM 1
-
-```bash
-# Tạo GitHub PAT với quyền write:packages
-# https://github.com/settings/tokens
-
-# Tạo file .env
-cat > /home/ubuntu/minipaas.env << EOF
-DB_HOST=localhost
-DB_USER=minipaas
-DB_PASSWORD=your_password
-K8S_MOCK=false
-KUBECONFIG=/home/ubuntu/.kube/config
-GHCR_USER=your-github-username
-GHCR_TOKEN=ghp_xxxx
-MASTER_IP=$(curl -s ifconfig.me)
-JWT_SECRET=$(openssl rand -base64 32)
-EOF
-
-# Apply RBAC
-kubectl apply -f infrastructure/k3s/rbac.yaml
-
-# Build & Run Spring Boot
-cd backend
-mvn package -DskipTests
-source /home/ubuntu/minipaas.env
-java -jar target/minipaas-backend-*.jar
-```
-
----
-
-## ☁️ Deploy lên AWS (Free Tier Optimized)
-
-Do AWS Free Tier chỉ cấp máy ảo 1GB RAM (t2/t3.micro), ta không thể dùng hạ tầng mặc định. Hệ thống cần bật Swap 4GB và có thể đẩy việc build image qua GitHub Actions.
+Hệ thống được tối ưu đặc biệt để chạy mượt mà trên giới hạn RAM 1GB của AWS EC2 Free Tier bằng cách tự động gán Swap 4GB và offload việc build tới GitHub.
 
 ### Bước 1: Tạo VM và Database trên AWS
-1. Tạo 1 **EC2 Instance (t2.micro)** Ubuntu 22.04. Mở ports: 22, 80, 443, 6443, 8472, 10250, 8080.
-2. Tạo **AWS RDS (db.t3.micro - Postgres)** để giải phóng RAM cho EC2. Ghi lại URL endpoint của DB.
+1. Đăng ký/Đăng nhập [AWS Console](https://aws.amazon.com/free/).
+2. Tạo 1 **EC2 Instance (t2.micro)** Ubuntu 22.04. Mở ports trong Security Group: **22, 80, 443, 6443, 8472, 10250, 8080**.
+3. Tạo **AWS RDS (db.t3.micro - Postgres)** để giải phóng RAM cho EC2. Ghi lại URL endpoint của DB.
 
 ### Bước 2: Khởi tạo EC2 Master Node (kèm 4GB Swap)
 ```bash
 ssh ubuntu@<VM-public-ip>
-export TS_AUTHKEY="tskey-auth-xxxxx"
+export TS_AUTHKEY="tskey-auth-xxxxx" # Lấy từ tailscale.com
 # Script tự động tạo 4GB Swap và cài đặt K3s siêu nhẹ
 bash <(curl -fsSL https://raw.githubusercontent.com/your-repo/main/infrastructure/aws/install-ec2-master.sh)
 ```
 
 ### Bước 3: Cấu hình Spring Boot dùng AWS RDS và GitHub Actions
-1. Đảm bảo bạn đã có workflow `.github/workflows/remote-build.yml` trong repository của bạn.
-2. Cấu hình file `.env` trên EC2:
 ```bash
+# Tạo file môi trường
 cat > /home/ubuntu/minipaas.env << EOF
 # Dùng Endpoint của AWS RDS cấp
 DB_HOST=minipaas-db.xxxx.us-east-1.rds.amazonaws.com
@@ -195,11 +115,17 @@ GHCR_USER=your-github-username
 GHCR_TOKEN=ghp_xxxx
 MASTER_IP=$(curl -s ifconfig.me)
 JWT_SECRET=$(openssl rand -base64 32)
-# Khởi động chế độ GitHub Actions Build (thay cho Kaniko)
+
+# Khởi động chế độ GitHub Actions Build (thay cho Kaniko K8s nội bộ)
 BUILD_STRATEGY=github
 EOF
+
+# Build & Run Spring Boot
+cd backend
+mvn package -DskipTests
+source /home/ubuntu/minipaas.env
+java -jar target/minipaas-backend-*.jar
 ```
-3. Chạy Spring Boot như hướng dẫn ở bước Oracle.
 
 ---
 
@@ -218,28 +144,27 @@ EOF
 
 ---
 
-## 🔄 Luồng Deploy Chi tiết
+## 🔄 Luồng Deploy (Sử dụng GitHub Actions Build Proxy)
 
 ```
-POST /api/v1/deployments { githubUrl, branch, port }
+POST /api/v1/deployments { githubUrl, branch }
   │
   ├─ Lưu DB: status=PENDING
   ├─ Trả về: { id, status: "PENDING" }
   │
   └─ @Async thread:
        │
-       ├─ 1. K8s: createNamespace("deploy-{id}")
-       ├─ 2. K8s: createSecret("ghcr-credentials")
-       ├─ 3. K8s: createJob("build-{ts}")
-       │         initContainer: alpine/git → clone repo
-       │         container: kaniko → build + push GHCR
+       ├─ Kiểm tra nhánh BUILD_STRATEGY=github
        │
-       ├─ 4. SSE stream: Kaniko pod logs → frontend
+       ├─ BƯỚC 1: REST POST đến GitHub API -> Triggers '.github/workflows/remote-build.yml'
+       ├─ BƯỚC 2: GitHub Action tự động: Clone repo -> Build Image -> Đẩy lên GHCR
+       ├─ BƯỚC 3: SSE Stream thông báo đang chờ build ("⏳ Đã gửi lệnh cho GitHub...")
        │
-       ├─ 5. K8s: createDeployment(image: ghcr.io/...)
-       ├─ 6. K8s: createService(ClusterIP)
-       ├─ 7. K8s: createIngressRoute → app.IP.nip.io
+       ├─ BƯỚC 4: (Sau khi github đẩy log) K8s: createNamespace() & createSecret()
+       ├─ BƯỚC 5: K8s: createDeployment(image: ghcr.io/...) trên K3s EC2
+       ├─ BƯỚC 6: K8s: createService(ClusterIP)
+       ├─ BƯỚC 7: K8s: createIngressRoute → app.EC2-IP.nip.io
        │
-       └─ 8. DB: status=RUNNING, url=http://...nip.io
+       └─ DB: status=RUNNING, url=http://...nip.io
               SSE event: { status: "RUNNING", url: "..." }
 ```
