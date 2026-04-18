@@ -1,5 +1,6 @@
 package com.minipaas;
 
+import com.minipaas.config.DotenvLoader;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -15,7 +16,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
  *   2. Gửi lệnh cho K3s tạo Kaniko Build Job (build Docker image)
  *   3. Stream build logs về frontend qua SSE (Server-Sent Events)
  *   4. Khi build xong: tạo K8s Deployment + Service + IngressRoute (Traefik)
- *   5. Trả về URL public (nip.io) cho người dùng
+ *   5. Trả về URL public (custom domain hoặc nip.io) cho người dùng
  *
  * @EnableAsync: Cho phép pipeline deploy chạy bất đồng bộ
  *              (không block HTTP request)
@@ -25,6 +26,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 public class MiniPaasApplication {
 
     public static void main(String[] args) {
+        DotenvLoader.load();
         SpringApplication.run(MiniPaasApplication.class, args);
     }
 }

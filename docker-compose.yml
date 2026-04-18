@@ -2,7 +2,9 @@
 #  docker-compose.yml — MiniPaaS Local Development
 # =============================================================
 # Chạy toàn bộ hệ thống trên máy local để phát triển và test.
-# K8s operations ở chế độ MOCK (K8S_MOCK=true).
+# K8s operations in MOCK mode (K8S_MOCK=true).
+#
+# Setup: copy .env.example to .env (optional; Compose loads it when present).
 #
 # Cách chạy:
 #   docker-compose up -d
@@ -39,22 +41,17 @@ services:
     container_name: minipaas-backend
     ports:
       - "8080:8080"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      # Database
+      # Overrides — local Postgres in compose wins over .env DB_HOST if set there
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: minipaas
       DB_USER: minipaas
       DB_PASSWORD: minipaas
-      # K8s — MOCK MODE cho local dev
       K8S_MOCK: "true"
-      # JWT
-      JWT_SECRET: "local-dev-secret-key-change-in-production"
-      # GHCR (không cần trong mock mode)
-      GHCR_USER: "your-github-username"
-      GHCR_TOKEN: "your-github-pat"
-      # IP của K3s Master (fake trong local dev)
-      MASTER_IP: "127.0.0.1"
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,8 +68,13 @@ services:
       - /app/node_modules
     ports:
       - "5173:5173"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      VITE_API_URL: http://localhost:8080
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+      # Vite proxy inside this container must reach the backend service
+      VITE_PROXY_TARGET: http://backend:8080
     depends_on:
       - backend
 

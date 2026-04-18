@@ -44,8 +44,14 @@ public class KubernetesService {
     @Value("${app.registry.ghcr-token}")
     private String ghcrToken;
 
-    @Value("${app.master-ip:127.0.0.1}")
-    private String masterIp;
+    @Value("${app.deployment.domain:}")
+    private String deploymentDomain;
+
+    @Value("${app.deployment.ingress-public-ip:127.0.0.1}")
+    private String ingressPublicIp;
+
+    @Value("${app.deployment.url-scheme:http}")
+    private String urlScheme;
 
     // ─────────────────────────────────────────────────
     // NAMESPACE
@@ -206,11 +212,12 @@ public class KubernetesService {
      * @return URL public của app (vd: http://app-abc.1.2.3.4.nip.io)
      */
     public String createIngressRoute(String namespace, String appName) {
-        String host = appName + "." + masterIp + ".nip.io";
+        String host = buildPublicHost(appName);
+        String publicUrl = normalizeScheme(urlScheme) + "://" + host;
 
         if (mockMode) {
-            log.info("[MOCK] createIngressRoute: {}", host);
-            return "http://" + host;
+            log.info("[MOCK] createIngressRoute: {} -> {}", host, publicUrl);
+            return publicUrl;
         }
 
         // Traefik IngressRoute là CRD — dùng GenericKubernetesResource
@@ -247,7 +254,32 @@ public class KubernetesService {
                 .resource(resource)
                 .createOrReplace();
 
-        log.info("✅ IngressRoute tạo → URL: http://{}", host);
-        return "http://" + host;
+        log.info("IngressRoute created: {}", publicUrl);
+        return publicUrl;
+    }
+
+    private String buildPublicHost(String appName) {
+        String segment = sanitizeHostnameSegment(appName);
+        if (deploymentDomain != null && !deploymentDomain.isBlank()) {
+            return segment + "." + deploymentDomain.trim().toLowerCase();
+        }
+        return segment + "." + ingressPublicIp + ".nip.io";
+    }
+
+    private static String sanitizeHostnameSegment(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "app";
+        }
+        String s = raw.toLowerCase().replaceAll("[^a-z0-9.-]", "-").replaceAll("-{2,}", "-");
+        s = s.replaceAll("^[.-]+|[.-]+$", "");
+        return s.isBlank() ? "app" : s;
+    }
+
+    private static String normalizeScheme(String scheme) {
+        if (scheme == null || scheme.isBlank()) {
+            return "http";
+        }
+        String s = scheme.trim().toLowerCase();
+        return "https".equals(s) ? "https" : "http";
     }
 }

@@ -46,15 +46,21 @@ export default function DeployPage() {
       // 2. Kết nối SSE để nhận logs real-time
       const token = localStorage.getItem('token')
       const evtSource = new EventSource(
-        `/api/v1/deployments/${depId}/logs?token=${token}`
+        `/api/v1/deployments/${depId}/logs?token=${encodeURIComponent(token ?? '')}`
       )
+
+      let streamFinished = false
 
       evtSource.addEventListener('log', e => {
         addLog(e.data)
       })
 
       evtSource.addEventListener('status', e => {
-        const [statusStr, url] = e.data.split(':')
+        streamFinished = true
+        const raw = e.data ?? ''
+        const i = raw.indexOf(':')
+        const statusStr = i === -1 ? raw : raw.slice(0, i)
+        const url = i === -1 ? '' : raw.slice(i + 1)
         setStatus(statusStr)
         if (url) setResultUrl(url)
         evtSource.close()
@@ -64,6 +70,12 @@ export default function DeployPage() {
       evtSource.onerror = () => {
         evtSource.close()
         setLoading(false)
+        if (streamFinished) return
+        setLogs(prev => [
+          ...prev,
+          'SSE error: lost log stream. Rebuild backend, login again, or: docker logs minipaas-backend'
+        ])
+        setStatus('FAILED')
       }
 
     } catch (err) {

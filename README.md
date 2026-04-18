@@ -69,6 +69,9 @@ HMCDOP/
 git clone <repository-url>
 cd HMCDOP
 
+# Optional: copy environment template (see .env.example)
+cp .env.example .env
+
 # Chạy services (PostgreSQL + Spring Boot + React)
 docker-compose up -d
 

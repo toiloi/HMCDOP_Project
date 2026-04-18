@@ -66,6 +66,9 @@ public class BuildService {
     @Value("${app.registry.ghcr-token:}")
     private String ghcrToken;
 
+    @Value("${app.github.dispatch-repository}")
+    private String dispatchRepository;
+
     private final RestTemplate restTemplate = new RestTemplate();
 
     /**
@@ -192,7 +195,10 @@ public class BuildService {
         String repoName = githubUrl.substring(githubUrl.lastIndexOf('/') + 1);
         String repoOwner = githubUrl.split("/")[3];
 
-        String dispatchUrl = "https://api.github.com/repos/" + ghcrUser + "/HMCDOP/dispatches";
+        String repo = dispatchRepository != null && !dispatchRepository.isBlank()
+                ? dispatchRepository.trim()
+                : ghcrUser + "/HMCDOP";
+        String dispatchUrl = "https://api.github.com/repos/" + repo + "/dispatches";
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + ghcrToken);
@@ -227,7 +233,7 @@ public class BuildService {
      * @return true nếu build thành công
      */
     public boolean buildAndWatch(String namespace, String githubUrl, String branch, String imageTag, UUID deploymentId) throws InterruptedException {
-        String strategy = System.getenv("BUILD_STRATEGY") != null ? System.getenv("BUILD_STRATEGY") : buildStrategy;
+        String strategy = buildStrategy;
         
         if ("github".equalsIgnoreCase(strategy)) {
             sseManager.sendLog(deploymentId, "🚀 [TỐI ƯU AWS] Kích hoạt bản build từ xa (GitHub Actions)...");

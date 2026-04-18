@@ -78,7 +78,8 @@ public class DeploymentController {
     /**
      * SSE Endpoint: Stream build logs real-time về client.
      *
-     * Client kết nối: new EventSource('/api/v1/deployments/{id}/logs')
+     * Client kết nối: new EventSource('/api/v1/deployments/{id}/logs?token=&lt;jwt&gt;')
+     * (EventSource cannot set Authorization; pass JWT as query param {@code token}.)
      *   event "log"    → một dòng log
      *   event "status" → trạng thái cuối cùng (RUNNING:url hoặc FAILED)
      *
@@ -138,12 +139,5 @@ public class DeploymentController {
     public ResponseEntity<Void> deleteDeployment(@PathVariable UUID id) {
         deploymentService.stopDeployment(id);
         return ResponseEntity.noContent().build();
-    }
-
-    /** Health check */
-    @GetMapping("/health")
-    @org.springframework.web.bind.annotation.RequestMapping(value = "/health", method = org.springframework.web.bind.annotation.RequestMethod.GET)
-    public ResponseEntity<?> health() {
-        return ResponseEntity.ok(java.util.Map.of("status", "ok", "service", "minipaas-control-plane"));
     }
 }

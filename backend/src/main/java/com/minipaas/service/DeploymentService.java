@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URI;
 import java.util.UUID;
 
 /**
@@ -58,9 +59,13 @@ public class DeploymentService {
     private final KubernetesService k8sService;
     private final BuildService buildService;
     private final DeploymentSseManager sseManager;
+    private final CloudflareDnsService cloudflareDnsService;
 
     @Value("${app.registry.ghcr-user}")
     private String ghcrUser;
+
+    @Value("${app.deployment.ingress-public-ip:127.0.0.1}")
+    private String ingressPublicIp;
 
     /**
      * Đăng ký deployment mới vào DB.
@@ -129,8 +134,21 @@ public class DeploymentService {
             sendLog(dep, "✅ K8s Service tạo: " + appName + "-svc");
 
             // ── BƯỚC 7: Tạo Traefik IngressRoute → Cấp URL ──
-            sendLog(dep, "🌐 Cấu hình Traefik Ingress (nip.io)...");
+            sendLog(dep, "🌐 Cấu hình Traefik Ingress...");
             String publicUrl = k8sService.createIngressRoute(namespace, appName);
+            if (cloudflareDnsService.isEnabled()) {
+                try {
+                    URI uri = URI.create(publicUrl);
+                    String fqdn = uri.getHost();
+                    if (fqdn != null && !fqdn.isBlank()) {
+                        cloudflareDnsService.upsertARecord(fqdn, ingressPublicIp);
+                        sendLog(dep, "Cloudflare DNS: " + fqdn + " -> " + ingressPublicIp);
+                    }
+                } catch (Exception e) {
+                    log.warn("Cloudflare DNS failed: {}", e.getMessage());
+                    sendLog(dep, "Cloudflare DNS warning: " + e.getMessage());
+                }
+            }
 
             // ── BƯỚC 8: Cập nhật DB → RUNNING ──
             dep.setStatus(DeployStatus.RUNNING);

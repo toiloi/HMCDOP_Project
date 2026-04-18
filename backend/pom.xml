@@ -50,6 +50,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Load .env into JVM system properties (local mvn / IDE; Docker uses env_file) -->
+        <dependency>
+            <groupId>io.github.cdimascio</groupId>
+            <artifactId>dotenv-java</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+
         <!-- ===== Fabric8 Kubernetes Client (giao tiếp với K3s) ===== -->
         <!--
             Fabric8 là Java client library để tương tác với Kubernetes API Server.
