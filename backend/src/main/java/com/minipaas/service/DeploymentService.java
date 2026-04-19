@@ -98,7 +98,7 @@ public class DeploymentService {
 
         String namespace = "deploy-" + deploymentId;
         String appName = dep.getAppName();
-        String imageTag = "ghcr.io/" + ghcrUser + "/app-" + deploymentId.toString().substring(0, 8) + ":latest";
+        String imageTag = ("ghcr.io/" + ghcrUser + "/app-" + deploymentId.toString().substring(0, 8) + ":latest").toLowerCase();
 
         try {
             // ── BƯỚC 1: Tạo Namespace ──

@@ -1,82 +1,41 @@
 # =============================================================
-#  docker-compose.yml — MiniPaaS Local Development
+#  docker-compose.yml — MiniPaaS Production (VPS)
 # =============================================================
-# Chạy toàn bộ hệ thống trên máy local để phát triển và test.
-# K8s operations in MOCK mode (K8S_MOCK=true).
-#
-# Setup: copy .env.example to .env (optional; Compose loads it when present).
-#
 # Cách chạy:
-#   docker-compose up -d
-#
-# Truy cập:
-#   Dashboard: http://localhost:5173
-#   API:       http://localhost:8080/api/v1/health
+#   docker compose up -d --build
 # =============================================================
 
 services:
 
-  # ── PostgreSQL Database ──────────────────────────────────
-  postgres:
-    image: postgres:16-alpine
-    container_name: minipaas-db
-    environment:
-      POSTGRES_DB: minipaas
-      POSTGRES_USER: minipaas
-      POSTGRES_PASSWORD: minipaas
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U minipaas"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  # ── Spring Boot Backend (Control Plane) ─────────────────
   backend:
     build: ./backend
     container_name: minipaas-backend
     ports:
       - "8080:8080"
     env_file:
-      - path: .env
-        required: false
+      - .env
+    volumes:
+      - ./kubeconfig.yaml/k3s.yaml:/root/.kube/config:ro
     environment:
-      # Overrides — local Postgres in compose wins over .env DB_HOST if set there
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: minipaas
-      DB_USER: minipaas
-      DB_PASSWORD: minipaas
-      K8S_MOCK: "true"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
+      - KUBERNETES_MASTER=https://${VPS_PUBLIC_IP}:6443
+      - KUBERNETES_TRUST_CERTIFICATES=true
+    extra_hosts:
+      - "kubernetes.default.svc:${VPS_PUBLIC_IP}"
+    restart: always
 
   # ── React Frontend ───────────────────────────────────────
   frontend:
     image: node:20-alpine
     container_name: minipaas-frontend
     working_dir: /app
-    command: sh -c "npm install && npm run dev -- --host"
+    command: sh -c "npm install && npm run build && npm run preview -- --host 0.0.0.0 --port 3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "5173:5173"
+      - "3000:3000"
     env_file:
-      - path: .env
-        required: false
-    environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
-      # Vite proxy inside this container must reach the backend service
-      VITE_PROXY_TARGET: http://backend:8080
+      - .env
     depends_on:
       - backend
-
-volumes:
-  postgres_data:
+    restart: always
