@@ -30,60 +30,86 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-box">
-        <div className="login-title">
-          <h1>🚀 MiniPaaS</h1>
+        {/* Logo */}
+        <div className="login-logo">
+          <div className="login-logo-icon">🚀</div>
+          <h1>MiniPaaS</h1>
           <p>Nền tảng Triển khai Tự động — Hybrid Multi-Cloud</p>
         </div>
 
-        <div className="card">
-          <div className="flex gap-2" style={{ marginBottom: 20 }}>
+        {/* Card */}
+        <div className="login-card">
+          {/* Tabs */}
+          <div className="tab-group">
             <button
-              className={'btn ' + (isLogin ? 'btn-primary' : '')}
-              style={{ flex: 1, background: isLogin ? undefined : 'transparent',
-                border: isLogin ? undefined : '1px solid var(--border)' }}
-              onClick={() => { setIsLogin(true); setError('') }}
-            >
+              id="tab-login"
+              className={'tab-btn' + (isLogin ? ' active' : '')}
+              onClick={() => { setIsLogin(true); setError('') }}>
               Đăng nhập
             </button>
             <button
-              className={'btn ' + (!isLogin ? 'btn-primary' : '')}
-              style={{ flex: 1, background: !isLogin ? undefined : 'transparent',
-                border: !isLogin ? undefined : '1px solid var(--border)' }}
-              onClick={() => { setIsLogin(false); setError('') }}
-            >
+              id="tab-register"
+              className={'tab-btn' + (!isLogin ? ' active' : '')}
+              onClick={() => { setIsLogin(false); setError('') }}>
               Đăng ký
             </button>
           </div>
 
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label className="label">Email</label>
-              <input className="input" type="email" placeholder="you@example.com"
-                value={email} onChange={e => setEmail(e.target.value)} required />
+              <label className="label" htmlFor="login-email">Email</label>
+              <input
+                id="login-email"
+                className="input"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+              />
             </div>
+
             <div className="form-group">
-              <label className="label">Mật khẩu</label>
-              <input className="input" type="password" placeholder="••••••••"
-                value={password} onChange={e => setPassword(e.target.value)} required />
+              <label className="label" htmlFor="login-password">Mật khẩu</label>
+              <input
+                id="login-password"
+                className="input"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+                autoComplete={isLogin ? 'current-password' : 'new-password'}
+              />
             </div>
 
             {error && (
-              <div className="alert-error" style={{ marginBottom: 12, padding: '8px 12px' }}>
-                ❌ {error}
+              <div className="alert alert-error" style={{ marginBottom: 16 }}>
+                <span>⚠</span>
+                <span>{error}</span>
               </div>
             )}
 
-            <button type="submit" className="btn btn-primary" disabled={loading}
-              style={{ width: '100%', justifyContent: 'center' }}>
-              {loading ? <><span className="spinner" /> Đang xử lý...</> :
-                (isLogin ? '→ Đăng nhập' : '→ Tạo tài khoản')}
+            <button
+              id="btn-submit-login"
+              type="submit"
+              className="btn btn-primary btn-full btn-lg"
+              disabled={loading}>
+              {loading
+                ? <><span className="spinner" /> Đang xử lý...</>
+                : isLogin ? 'Đăng nhập →' : 'Tạo tài khoản →'}
             </button>
           </form>
         </div>
 
-        <p className="text-muted" style={{ textAlign: 'center', marginTop: 16 }}>
-          K3s × Tailscale × Kaniko × Traefik
-        </p>
+        {/* Footer chips */}
+        <div className="login-footer">
+          <span className="login-footer-chip">K3s</span>
+          <span className="login-footer-chip">Tailscale</span>
+          <span className="login-footer-chip">Kaniko</span>
+          <span className="login-footer-chip">Traefik</span>
+        </div>
       </div>
     </div>
   )
