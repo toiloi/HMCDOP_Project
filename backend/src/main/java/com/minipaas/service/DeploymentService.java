@@ -17,37 +17,37 @@ import java.util.UUID;
 
 /**
  * ================================================================
- *  DeploymentService — Điều phối toàn bộ Deploy Pipeline
+ * DeploymentService — Điều phối toàn bộ Deploy Pipeline
  * ================================================================
  *
  * Đây là service cốt lõi của hệ thống Mini-PaaS.
  * Khi người dùng gửi yêu cầu deploy, luồng xử lý như sau:
  *
- *  [HTTP Request] → startDeployment() → lưu DB (PENDING)
- *                                      → kích hoạt executeDeployment() @Async
- *  [Trả response ngay] ← deploymentId
+ * [HTTP Request] → startDeployment() → lưu DB (PENDING)
+ * → kích hoạt executeDeployment() @Async
+ * [Trả response ngay] ← deploymentId
  *
- *  [Thread riêng - @Async]:
- *    1. Tạo K8s Namespace
- *    2. Tạo GHCR Registry Secret
- *    3. Tạo Kaniko Job (clone repo + build image)
- *    4. Stream logs về frontend (SSE)
- *    5. Khi build xong: tạo K8s Deployment + Service
- *    6. Tạo Traefik IngressRoute → cấp URL
- *    7. Cập nhật DB (RUNNING + URL)
+ * [Thread riêng - @Async]:
+ * 1. Tạo K8s Namespace
+ * 2. Tạo GHCR Registry Secret
+ * 3. Tạo Kaniko Job (clone repo + build image)
+ * 4. Stream logs về frontend (SSE)
+ * 5. Khi build xong: tạo K8s Deployment + Service
+ * 6. Tạo Traefik IngressRoute → cấp URL
+ * 7. Cập nhật DB (RUNNING + URL)
  *
  * Sơ đồ:
- *  ┌───────────────┐     ┌────────────────┐     ┌─────────────────┐
- *  │ Spring Boot   │────▶│ K3s API Server │────▶│ Kaniko Pod      │
- *  │ (Fabric8)     │     │ (Tailscale IP) │     │ (Worker Node)   │
- *  └───────────────┘     └────────────────┘     └─────────────────┘
- *         │                                              │
- *         │ SSE stream logs                             │ Build image
- *         ▼                                             ▼
- *  ┌───────────────┐                          ┌──────────────────┐
- *  │ Frontend      │                          │ GHCR Registry    │
- *  │ (LogViewer)   │                          │ ghcr.io/user/app │
- *  └───────────────┘                          └──────────────────┘
+ * ┌───────────────┐ ┌────────────────┐ ┌─────────────────┐
+ * │ Spring Boot │────▶│ K3s API Server │────▶│ Kaniko Pod │
+ * │ (Fabric8) │ │ (Tailscale IP) │ │ (Worker Node) │
+ * └───────────────┘ └────────────────┘ └─────────────────┘
+ * │ │
+ * │ SSE stream logs │ Build image
+ * ▼ ▼
+ * ┌───────────────┐ ┌──────────────────┐
+ * │ Frontend │ │ GHCR Registry │
+ * │ (LogViewer) │ │ ghcr.io/user/app │
+ * └───────────────┘ └──────────────────┘
  */
 @Service
 @RequiredArgsConstructor
@@ -73,16 +73,18 @@ public class DeploymentService {
      */
     @Transactional
     public Deployment createDeployment(Deployment deployment) {
+        deployment.setStatus(DeployStatus.PENDING);
+        // Lưu lần 1 để hệ thống sinh ra một UUID độc nhất
+        deployment = deploymentRepo.save(deployment);
+        
         // Lấy repo name từ GitHub URL để làm app name
         String repoName = extractRepoName(deployment.getGithubUrl());
-        String shortId = deployment.getId() != null
-                ? deployment.getId().toString().substring(0, 8)
-                : "00000000";
+        String shortId = deployment.getId().toString().substring(0, 8);
+        
         deployment.setAppName("app-" + repoName.toLowerCase() + "-" + shortId);
-        deployment.setStatus(DeployStatus.PENDING);
-        deployment.setK8sNamespace("deploy-" + (deployment.getId() != null
-                ? deployment.getId().toString() : "pending"));
+        deployment.setK8sNamespace("deploy-" + deployment.getId().toString());
 
+        // Lưu lần 2 để cập nhật appName và k8sNamespace vào db
         return deploymentRepo.save(deployment);
     }
 
@@ -98,7 +100,8 @@ public class DeploymentService {
 
         String namespace = "deploy-" + deploymentId;
         String appName = dep.getAppName();
-        String imageTag = ("ghcr.io/" + ghcrUser + "/app-" + deploymentId.toString().substring(0, 8) + ":latest").toLowerCase();
+        String imageTag = ("ghcr.io/" + ghcrUser + "/app-" + deploymentId.toString().substring(0, 8) + ":latest")
+                .toLowerCase();
 
         try {
             // ── BƯỚC 1: Tạo Namespace ──
@@ -118,7 +121,8 @@ public class DeploymentService {
 
             // ── BƯỚC 3 & 4: Build Image & Theo dõi (Kaniko hoặc GitHub Actions) ──
             sendLog(dep, "⏳ Đang khởi tạo luồng Build Image...");
-            boolean buildSuccess = buildService.buildAndWatch(namespace, dep.getGithubUrl(), dep.getBranch(), imageTag, deploymentId);
+            boolean buildSuccess = buildService.buildAndWatch(namespace, dep.getGithubUrl(), dep.getBranch(), imageTag,
+                    deploymentId);
 
             if (!buildSuccess) {
                 throw new RuntimeException("Build Image thất bại!");

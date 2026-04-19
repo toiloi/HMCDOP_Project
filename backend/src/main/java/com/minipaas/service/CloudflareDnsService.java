@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 
 import java.net.InetAddress;
 import java.net.URI;
@@ -30,7 +31,8 @@ public class CloudflareDnsService {
     private static final String API_BASE = "https://api.cloudflare.com/client/v4";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final RestTemplate restTemplate = new RestTemplate();
+    // private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = new RestTemplate(new JdkClientHttpRequestFactory());
 
     @Value("${app.cloudflare.enabled:false}")
     private boolean enabled;

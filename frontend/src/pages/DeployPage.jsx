@@ -29,7 +29,7 @@ function IconArrowLeft() {
 export default function DeployPage() {
   const [githubUrl, setGithubUrl] = useState('')
   const [branch, setBranch] = useState('main')
-  const [port, setPort] = useState(8080)
+  const [port, setPort] = useState(80)
   const [loading, setLoading] = useState(false)
   const [logs, setLogs] = useState([])
   const [status, setStatus] = useState(null) // null | 'BUILDING' | 'RUNNING' | 'FAILED'

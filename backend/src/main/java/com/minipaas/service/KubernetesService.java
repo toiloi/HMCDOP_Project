@@ -220,41 +220,40 @@ public class KubernetesService {
             return publicUrl;
         }
 
-        // Traefik IngressRoute là CRD — dùng GenericKubernetesResource
-        String ingressRouteYaml = """
-                apiVersion: traefik.containo.us/v1alpha1
-                kind: IngressRoute
-                metadata:
-                  name: %s-route
-                  namespace: %s
-                spec:
-                  entryPoints:
-                    - web
-                  routes:
-                    - match: Host(`%s`)
-                      kind: Rule
-                      services:
-                        - name: %s-svc
-                          port: 80
-                """.formatted(appName, namespace, host, appName);
-
-        var context = new io.fabric8.kubernetes.client.dsl.base.ResourceDefinitionContext.Builder()
-                .withGroup("traefik.containo.us")
-                .withVersion("v1alpha1")
-                .withKind("IngressRoute")
-                .withNamespaced(true)
+        // Chuyển sang sử dụng chuẩn Kubernetes Ingress (networking.k8s.io/v1) thay vì Traefik CRD
+        // Traefik Ingress Controller trong K3s hỗ trợ hoàn hảo chuẩn Ingress này.
+        io.fabric8.kubernetes.api.model.networking.v1.Ingress ingress = 
+            new io.fabric8.kubernetes.api.model.networking.v1.IngressBuilder()
+                .withNewMetadata()
+                    .withName(appName + "-ingress")
+                    .withNamespace(namespace)
+                    // Hướng dẫn Traefik mở cả port 80 và 443 cho host này
+                    .addToAnnotations("traefik.ingress.kubernetes.io/router.entrypoints", "web,websecure")
+                .endMetadata()
+                .withNewSpec()
+                    .addNewRule()
+                        .withHost(host)
+                        .withNewHttp()
+                            .addNewPath()
+                                .withPath("/")
+                                .withPathType("Prefix")
+                                .withNewBackend()
+                                    .withNewService()
+                                        .withName(appName + "-svc")
+                                        .withNewPort()
+                                            .withNumber(80)
+                                        .endPort()
+                                    .endService()
+                                .endBackend()
+                            .endPath()
+                        .endHttp()
+                    .endRule()
+                .endSpec()
                 .build();
 
-        var resource = io.fabric8.kubernetes.client.utils.Serialization
-                .unmarshal(ingressRouteYaml,
-                        io.fabric8.kubernetes.api.model.GenericKubernetesResource.class);
+        client.network().v1().ingresses().inNamespace(namespace).resource(ingress).createOrReplace();
 
-        client.genericKubernetesResources(context)
-                .inNamespace(namespace)
-                .resource(resource)
-                .createOrReplace();
-
-        log.info("IngressRoute created: {}", publicUrl);
+        log.info("Ingress created: {}", publicUrl);
         return publicUrl;
     }
 
